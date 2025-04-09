@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Generation Tool</title>
+    <link rel="stylesheet" href="static/styles.css" type="text/css">
+</head>
+<body>
+    <div class="container">
+        <h1>Lead Generation Tool</h1>
+        
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'SingleURL')">Single/Multiple URLs</button>
+            <button class="tablinks" onclick="openTab(event, 'BatchUpload')">Batch Upload</button>
+            <button class="tablinks" onclick="openTab(event, 'Jobs')">Active Jobs</button>
+            <button class="tablinks" onclick="openTab(event, 'Downloads')">Downloads</button>
+        </div>
+        
+        <div id="SingleURL" class="tabcontent" style="display:block;">
+            <h2>Analyze URLs for Leads</h2>
+            
+            <div class="form-group">
+                <label for="urls">Enter URLs (one per line):</label>
+                <textarea id="urls" placeholder="https://example.com&#10;https://anotherwebsite.com"></textarea>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="extract_phones" checked>
+                <label for="extract_phones">Extract Phone Numbers</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="extract_social" checked>
+                <label for="extract_social">Extract Social Media Profiles</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="extract_company" checked>
+                <label for="extract_company">Extract Company Information</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="deep_analysis">
+                <label for="deep_analysis">Perform Deep Analysis (takes longer)</label>
+            </div>
+            
+            <button onclick="analyzeSingleURLs()">Analyze URLs</button>
+            
+            <div id="single-loader" class="loader"></div>
+            <div id="single-alert" class="alert"></div>
+            
+            <div id="single-results" class="results" style="display:none;">
+                <h3>Results</h3>
+                <button onclick="downloadSingleResults()" class="download-btn">Download Results as CSV</button>
+                <div id="results-table"></div>
+            </div>
+        </div>
+        
+        <div id="BatchUpload" class="tabcontent">
+            <h2>Batch Process URLs</h2>
+            
+            <div class="form-group">
+                <label for="csv-file">Upload CSV file with URLs (should have a column named 'url'):</label>
+                <input type="file" id="csv-file" class="file-upload" accept=".csv">
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="batch_extract_phones" checked>
+                <label for="batch_extract_phones">Extract Phone Numbers</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="batch_extract_social" checked>
+                <label for="batch_extract_social">Extract Social Media Profiles</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="batch_extract_company" checked>
+                <label for="batch_extract_company">Extract Company Information</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="batch_deep_analysis">
+                <label for="batch_deep_analysis">Perform Deep Analysis (takes longer)</label>
+            </div>
+            
+            <button onclick="submitBatchJob()">Start Batch Processing</button>
+            
+            <div id="batch-loader" class="loader"></div>
+            <div id="batch-alert" class="alert"></div>
+        </div>
+        
+        <div id="Jobs" class="tabcontent">
+            <h2>Active Jobs</h2>
+            <button onclick="refreshJobs()">Refresh Jobs</button>
+            
+            <div id="jobs-container">
+                <p>No active jobs found.</p>
+            </div>
+        </div>
+        
+        <div id="Downloads" class="tabcontent">
+            <h2>Available Downloads</h2>
+            <button onclick="refreshDownloads()">Refresh Downloads</button>
+            
+            <div id="downloads-container">
+                <p>Loading available downloads...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab functionality
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+            
+            // Load tab-specific content
+            if (tabName === "Jobs") {
+                refreshJobs();
+            } else if (tabName === "Downloads") {
+                refreshDownloads();
+            }
+        }
+        
+        // Single URL analysis
+        async function analyzeSingleURLs() {
+            const urlsText = document.getElementById("urls").value.trim();
+            if (!urlsText) {
+                showAlert("single-alert", "Please enter at least one URL", false);
+                return;
+            }
+            
+            const urls = urlsText.split(/\r?\n/).filter(url => url.trim());
+            // Validate URLs
+            const validUrls = urls.filter(url => {
+                try {
+                    new URL(url);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            });
+            
+            if (validUrls.length === 0) {
+                showAlert("single-alert", "Please enter valid URLs", false);
+                return;
+            }
+            console.log(typeof validUrls, validUrls);
+            
+            // Collect options
+            const options = {
+                extract_phones: document.getElementById("extract_phones").checked,
+                extract_social_media: document.getElementById("extract_social").checked,
+                extract_company_info: document.getElementById("extract_company").checked,
+                deep_analysis: document.getElementById("deep_analysis").checked
+            };
+            
+            // Show loader
+            document.getElementById("single-loader").style.display = "block";
+            document.getElementById("single-results").style.display = "none";
+            hideAlert("single-alert");
+            
+            try {
+                const response = await fetch('/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        urls: validUrls,
+                        ...options
+                    }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const results = await response.json();
+                displayResults(results);
+                showAlert("single-alert", `Successfully analyzed ${results.length} URLs.`, true);
+                
+            } catch (error) {
+                showAlert("single-alert", `Failed to analyze URLs: ${error.message}`, false);
+            }
+            
+            // Hide loader
+            document.getElementById("single-loader").style.display = "none";
+        }
+        
+        // Display results
+        function displayResults(results) {
+            const resultsDiv = document.getElementById("results-table");
+            
+            if (results.length === 0) {
+                resultsDiv.innerHTML = "<p>No results found.</p>";
+                return;
+            }
+            
+            let tableHtml = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>URL</th>
+                            <th>Relevant</th>
+                            <th>Score</th>
+                            <th>Emails</th>
+                            <th>Phones</th>
+                            <th>Company</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const lead of results) {
+                const relevanceClass = lead.relevant ? 'badge-success' : 'badge-danger';
+                const relevanceText = lead.relevant ? 'Yes' : 'No';
+                const score = Math.round(lead.relevance_score * 100);
+                
+                tableHtml += `
+                    <tr>
+                        <td>${lead.url}</td>
+                        <td><span class="badge ${relevanceClass}">${relevanceText}</span></td>
+                        <td>${score}%</td>
+                        <td>${lead.contact_info.emails.join("<br>") || "None"}</td>
+                        <td>${lead.contact_info.phones.join("<br>") || "None"}</td>
+                        <td>${lead.org_info.name || "Unknown"}</td>
+                        <td>
+                            <button onclick='showLeadDetails(${JSON.stringify(lead).replace(/'/g, "\\'")})'>
+                                View Details
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            tableHtml += `
+                    </tbody>
+                </table>
+            `;
+            
+            resultsDiv.innerHTML = tableHtml;
+            document.getElementById("single-results").style.display = "block";
+        }
+        
+        // Batch processing
+        async function submitBatchJob() {
+            const fileInput = document.getElementById("csv-file");
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showAlert("batch-alert", "Please select a CSV file", false);
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            
+            // Show loader
+            document.getElementById("batch-loader").style.display = "block";
+            hideAlert("batch-alert");
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('extract_phones', document.getElementById("batch_extract_phones").checked);
+            formData.append('extract_social_media', document.getElementById("batch_extract_social").checked);
+            formData.append('extract_company_info', document.getElementById("batch_extract_company").checked);
+            formData.append('deep_analysis', document.getElementById("batch_deep_analysis").checked);
+            
+            try {
+                const response = await fetch('/batch-upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                showAlert("batch-alert", `Job submitted successfully! Job ID: ${result.job_id}`, true);
+                
+                // Switch to jobs tab
+                const jobsTabButton = document.querySelector('.tablinks:nth-child(3)');
+                jobsTabButton.click();
+                
+            } catch (error) {
+                showAlert("batch-alert", `Failed to submit batch job: ${error.message}`, false);
+            }
+            
+            // Hide loader
+            document.getElementById("batch-loader").style.display = "none";
+        }
+        
+        // Job status
+        async function refreshJobs() {
+            try {
+                const response = await fetch('/jobs');
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const jobs = await response.json();
+                displayJobs(jobs);
+                
+            } catch (error) {
+                console.error("Failed to fetch jobs:", error);
+                document.getElementById("jobs-container").innerHTML = `
+                    <p>Failed to load jobs: ${error.message}</p>
+                `;
+            }
+        }
+        
+        function displayJobs(jobs) {
+            const container = document.getElementById("jobs-container");
+            
+            if (jobs.length === 0) {
+                container.innerHTML = "<p>No active jobs found.</p>";
+                return;
+            }
+            
+            let html = `<div class="jobs-list">`;
+            
+            for (const job of jobs) {
+                const progressPercent = job.total_urls > 0 
+                    ? Math.round((job.processed_urls / job.total_urls) * 100)
+                    : 0;
+                
+                html += `
+                    <div class="job-card">
+                        <h3>Job ID: ${job.job_id}</h3>
+                        <p>Status: ${job.status}</p>
+                        <p>URLs: ${job.processed_urls} / ${job.total_urls}</p>
+                        
+                        <div class="progress-container">
+                            <div class="progress">
+                                <div class="progress-bar" style="width: ${progressPercent}%">
+                                    ${progressPercent}%
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${job.completed && job.results_file ? 
+                            `<button onclick="downloadFile('${job.results_file}')" class="download-btn">
+                                Download Results
+                            </button>` : 
+                            ''
+                        }
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+        
+        // Downloads
+        async function refreshDownloads() {
+            try {
+                const response = await fetch('/downloads');
+                
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
+                const files = await response.json();
+                displayDownloads(files);
+                
+            } catch (error) {
+                console.error("Failed to fetch downloads:", error);
+                document.getElementById("downloads-container").innerHTML = `
+                    <p>Failed to load downloads: ${error.message}</p>
+                `;
+            }
+        }
+        
+        function displayDownloads(files) {
+            const container = document.getElementById("downloads-container");
+            
+            if (files.length === 0) {
+                container.innerHTML = "<p>No downloads available.</p>";
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            for (const file of files) {
+                html += `
+                    <tr>
+                        <td>${file.name}</td>
+                        <td>${file.created}</td>
+                        <td>
+                            <button onclick="downloadFile('${file.name}')" class="download-btn">
+                                Download
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // Download functions
+        function downloadFile(filename) {
+            window.location.href = `/download/${filename}`;
+        }
+        
+        function downloadSingleResults() {
+            fetch('/export-current-results', {
+                method: 'POST',
+                credentials: 'same-origin' // Ensure cookies are sent with the request
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if(response.status === 404) {
+                        throw new Error('No results available to export. Please analyze some URLs first.');
+                    }
+                    throw new Error(`Error: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.filename) {
+                    downloadFile(data.filename);
+                }
+            })
+            .catch(error => {
+                console.error("Failed to export results:", error);
+                showAlert("single-alert", `Failed to export results: ${error.message}`, false);
+            });
+        }
+        
+        // Helper functions
+        function showAlert(id, message, isSuccess) {
+            const alertEl = document.getElementById(id);
+            alertEl.textContent = message;
+            alertEl.style.display = "block";
+            
+            if (isSuccess) {
+                alertEl.classList.add("success");
+            } else {
+                alertEl.classList.remove("success");
+            }
+        }
+        
+        function hideAlert(id) {
+            document.getElementById(id).style.display = "none";
+        }
+        
+        function showLeadDetails(lead) {
+            // Create modal with lead details
+            const modal = document.createElement("div");
+            modal.style.position = "fixed";
+            modal.style.left = "0";
+            modal.style.top = "0";
+            modal.style.width = "100%";
+            modal.style.height = "100%";
+            modal.style.backgroundColor = "rgba(0,0,0,0.5)";
+            modal.style.display = "flex";
+            modal.style.justifyContent = "center";
+            modal.style.alignItems = "center";
+            modal.style.zIndex = "1000";
+            
+            // Create content
+            const content = document.createElement("div");
+            content.style.backgroundColor = "white";
+            content.style.padding = "20px";
+            content.style.borderRadius = "5px";
+            content.style.maxWidth = "800px";
+            content.style.width = "80%";
+            content.style.maxHeight = "80vh";
+            content.style.overflowY = "auto";
+            
+            // Format social media links
+            let socialLinks = "";
+            for (const [platform, url] of Object.entries(lead.contact_info.social_media)) {
+                socialLinks += `<li><strong>${platform}:</strong> <a href="${url}" target="_blank">${url}</a></li>`;
+            }
+            if (!socialLinks) socialLinks = "<li>None found</li>";
+            
+            // Create HTML content
+            content.innerHTML = `
+                <h2>${lead.title || lead.domain}</h2>
+                <button id="close-modal" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:20px;cursor:pointer;">✖</button>
+                
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div>
+                        <h3>Basic Information</h3>
+                        <p><strong>URL:</strong> <a href="${lead.url}" target="_blank">${lead.url}</a></p>
+                        <p><strong>Domain:</strong> ${lead.domain}</p>
+                        <p><strong>Relevant:</strong> ${lead.relevant ? 'Yes' : 'No'}</p>
+                        <p><strong>Relevance Score:</strong> ${Math.round(lead.relevance_score * 100)}%</p>
+                        
+                        <h3>Contact Information</h3>
+                        <p><strong>Emails:</strong></p>
+                        <ul>
+                            ${lead.contact_info.emails.length ? lead.contact_info.emails.map(email => `<li>${email}</li>`).join('') : '<li>None found</li>'}
+                        </ul>
+                        
+                        <p><strong>Phone Numbers:</strong></p>
+                        <ul>
+                            ${lead.contact_info.phones.length ? lead.contact_info.phones.map(phone => `<li>${phone}</li>`).join('') : '<li>None found</li>'}
+                        </ul>
+                        
+                        <p><strong>Social Media:</strong></p>
+                        <ul>
+                            ${socialLinks}
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h3>Company Information</h3>
+                        <p><strong>Name:</strong> ${lead.org_info.name || 'Unknown'}</p>
+                        <p><strong>Industry:</strong> ${lead.org_info.industry || 'Unknown'}</p>
+                        <p><strong>Size Estimate:</strong> ${lead.org_info.size_estimate || 'Unknown'}</p>
+                        <p><strong>Description:</strong> ${lead.org_info.description || 'No description available'}</p>
+                        
+                        ${lead.analysis ? `
+                            <h3>AI Analysis</h3>
+                            <div style="background:#f9f9f9;padding:10px;border-radius:5px;">
+                                <p>${lead.analysis.replace(/\\n/g, '<br>')}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            // Close button functionality
+            document.getElementById("close-modal").addEventListener("click", function() {
+                document.body.removeChild(modal);
+            });
+            
+            // Close on outside click
+            modal.addEventListener("click", function(e) {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            });
+        }
+        
+        // Initialize
+        document.addEventListener("DOMContentLoaded", function() {
+            // Load downloads tab data
+            refreshDownloads();
+        });
+    </script>
+</body>
+</html>

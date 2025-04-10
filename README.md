@@ -27,7 +27,7 @@ An AI-powered web application that helps businesses extract and analyze potentia
 
 1. Clone this repository:
    ```
-   git clone <repository-url>
+   git clone https://github.com/ShrijalShrestha/LeadGenTool.git
    cd LeadGenTool
    ```
 
@@ -118,11 +118,3 @@ The tool is built with:
 - **Pandas**: For data processing
 - **Jinja2**: For HTML templating
 - **JavaScript**: For frontend interactivity
-
-## License
-
-[Include license information here]
-
-## Contributing
-
-[Include contribution guidelines here if applicable]

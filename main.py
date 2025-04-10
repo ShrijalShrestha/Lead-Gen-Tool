@@ -184,7 +184,7 @@ def extract_social_media(html: str) -> Dict[str, str]:
 
 async def analyze_with_ai(url: str, content: Dict[str, Any], extract_company_info: bool = True, deep_analysis: bool = False) -> Dict[str, Any]:
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         
         # Basic relevance check
         relevance_prompt = (

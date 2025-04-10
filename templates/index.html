@@ -111,6 +111,9 @@
     </div>
 
     <script>
+        // Store leads data globally
+        let leadsData = [];
+        
         // Tab functionality
         function openTab(evt, tabName) {
             var i, tabcontent, tablinks;
@@ -208,6 +211,9 @@
                 return;
             }
             
+            // Store the results in our global array
+            leadsData = results;
+            
             let tableHtml = `
                 <table>
                     <thead>
@@ -224,7 +230,8 @@
                     <tbody>
             `;
             
-            for (const lead of results) {
+            for (let i = 0; i < results.length; i++) {
+                const lead = results[i];
                 const relevanceClass = lead.relevant ? 'badge-success' : 'badge-danger';
                 const relevanceText = lead.relevant ? 'Yes' : 'No';
                 const score = Math.round(lead.relevance_score * 100);
@@ -238,7 +245,7 @@
                         <td>${lead.contact_info.phones.join("<br>") || "None"}</td>
                         <td>${lead.org_info.name || "Unknown"}</td>
                         <td>
-                            <button onclick='showLeadDetails(${JSON.stringify(lead).replace(/'/g, "\\'")})'>
+                            <button onclick="showLeadDetails(${i})">
                                 View Details
                             </button>
                         </td>
@@ -474,7 +481,8 @@
             document.getElementById(id).style.display = "none";
         }
         
-        function showLeadDetails(lead) {
+        function showLeadDetails(index) {
+            const lead = leadsData[index];
             // Create modal with lead details
             const modal = document.createElement("div");
             modal.style.position = "fixed";
